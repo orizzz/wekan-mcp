@@ -1,120 +1,44 @@
-# Wekan MCP Server
+# SPN Wekan MCP
 
-made by namar0x0309 with ❤️ at GoAIX
+Local stdio MCP server for the Wekan instance at `http://localhost:3000`, with the SPN board named **SPN Work**.
 
-![Demo](demo1.gif)
+## Requirements
 
-This project includes scripts to automatically generate Wekan API tokens and configure your environment.
+- Node.js 20 or newer
+- A reachable Wekan instance
+- `.env` containing `WEKAN_BASE_URL` and either an API token or username/password
 
-## Supported Agent Functionality
-
-The Wekan MCP Server provides the following tools for AI agents to interact with Wekan:
-
-### Board Management
-- **listBoards** - List all accessible Wekan boards available to the authenticated user
-
-### List Management
-- **listLists** - List all lists within a specific board
-
-### Swimlane Management
-- **listSwimlanes** - List all swimlanes in a board (used for organizing cards vertically)
-
-### Card Management
-- **listCards** - List all cards in a specific board and list
-- **createCard** - Create a new card with support for:
-  - Title (required)
-  - Description (optional)
-  - Swimlane assignment (optional)
-  - Due date (optional, ISO 8601 datetime format)
-  - Team members (optional, array of user IDs)
-  - Labels (optional, array of label IDs)
-- **moveCard** - Move a card to another list or swimlane within the same board
-
-### Card Interaction
-- **commentCard** - Add a comment to an existing card
-
-## Getting Started
-
-### Generate Wekan API Token
-
-Run the appropriate script for your platform to generate your API token:
-
-**Windows (PowerShell):**
-```powershell
-./get-wekan-token.ps1
-```
-
-**Linux/macOS (Bash):**
-```bash
-./get-wekan-token.sh
-```
-
-The script will prompt you for:
-- Wekan endpoint (e.g., https://wekan.namar0x0309.com)
-- Username
-- Password
-
-After successful authentication, it will:
-1. Generate an API token
-2. Create or update the `.env` file with your token and configuration
-
-### Manual Configuration
-
-If you prefer to configure manually, copy `.env.example` to `.env` and fill in your details:
+## Setup
 
 ```bash
 cp .env.example .env
+npm install
+npm run build
+npm test
+./bin/wekan-mcp
 ```
 
-Then edit the `.env` file with your Wekan instance details and API token.
+Run `npm run test:live` only against the local SPN Work board. It creates temporary cards and removes them in a `finally` cleanup.
+Run `npm run test:mcp` to verify stdio initialization, tool discovery, authentication, and a board read through the real launcher.
 
-## Environment Variables
+The launcher uses the local Node 22 binary and changes into this directory before starting, so `.env` is loaded consistently from AionUI.
 
-The `.env` file contains:
+## Tools
 
-- `WEKAN_BASE_URL`: Your Wekan instance URL
-- `WEKAN_API_TOKEN`: Generated API token for authentication
-- `WEKAN_USERNAME`: Your Wekan username (alternative to API token)
-- `WEKAN_PASSWORD`: Your Wekan password (alternative to API token)
-- `WEKAN_USER_ID`: Your Wekan user ID
-- `WEKAN_TOKEN_EXPIRES`: Token expiration date
+- Discovery: `healthCheck`, `listBoards`, `getBoard`, `listLists`, `listSwimlanes`, `listCards`, `getCard`
+- Cards: `createCard`, `createSubtask`, `updateCard`, `moveCard`, `deleteCard`
+- Comments: `listComments`, `commentCard`
+- Checklists: `listChecklists`, `createChecklist`, `addChecklistItem`, `updateChecklistItem`
 
-**Note:** You can authenticate using either:
-1. `WEKAN_API_TOKEN` - Pre-generated token, or
-2. `WEKAN_USERNAME` and `WEKAN_PASSWORD` - For automatic token generation on each request
+`deleteCard` requires `confirm: true`. `updateCard` and `moveCard` require the card's current list as `fromListId`, matching Wekan's REST route.
 
-## Testing
+## Native subtasks
 
-You can test your configuration by running:
+Use `createSubtask` with the parent card ID. Wekan stores the new card with `parentId`, so it appears in the parent card's native subtask section rather than as a checklist item. This server uses Wekan's one-card bulk route for subtasks because the running build's normal create-card route does not persist `parentId` from its request body.
 
-```bash
-node test-auth.js
-```
+## Current SPN Work IDs
 
-This will verify that your API token is working correctly.
+- Board: `Nydgc3SwgXmTBa2et`
+- Default swimlane: `qrpAQSEdtkYv9zKSP`
 
-You can also test all available methods:
-
-```bash
-node test-all-methods.js
-```
-
-## Development
-
-### MCP Inspector
-
-For development and debugging the MCP server, you can use the MCP Inspector:
-
-```bash
-npm run inspect
-```
-
-This will launch the MCP Inspector with the configuration from `mcp-inspector-config.json`.
-
-For development with automatic rebuilding:
-
-```bash
-npm run inspect:watch
-```
-
-This will build the project and launch the inspector, automatically rebuilding when changes are detected.
+IDs should still be rediscovered with list tools when boards are recreated.

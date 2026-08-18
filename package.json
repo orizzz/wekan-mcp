@@ -1,21 +1,21 @@
 {
-  "name": "wekanmcpserver",
+  "name": "spn-wekan-mcp",
   "version": "1.0.0",
-  "description": "MCP server for Wekan - made by namar0x0309 with ❤️ at GoAIX",
-  "main": "dist/server.js",
+  "private": true,
   "type": "module",
+  "description": "Local MCP server for the SPN Work Wekan board",
+  "main": "dist/server.js",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/server.js",
-    "dev": "ts-node src/server.ts",
-
-    "inspect": "mcp-inspector --config ./mcp-inspector-config.json --server wekan",
-
-    "inspect:watch": "npm run build && mcp-inspector --config ./mcp-inspector-config.json --server wekan"
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test test/**/*.test.ts",
+    "test:live": "tsx scripts/live-smoke.ts",
+    "test:mcp": "tsx scripts/mcp-smoke.ts",
+    "start": "node dist/server.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.2",
     "dotenv": "^17.2.3",
@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.9.2",
-    "ts-node": "^10.9.2",
+    "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   }
 }

@@ -11,7 +11,7 @@
     "test": "tsx --test test/**/*.test.ts",
     "test:live": "tsx scripts/live-smoke.ts",
     "test:mcp": "tsx scripts/mcp-smoke.ts",
-    "start": "node dist/server.js"
+    "start": "node dist/src/server.js"
   },
   "engines": {
     "node": ">=20"

@@ -122,10 +122,16 @@ Native subtasks are stored with Wekan's `parentId` relationship. The server uses
 The repository includes a convenience stack using Wekan and FerretDB with named Docker volumes:
 
 ```bash
+docker compose -f docker-compose.yml config --quiet
 docker compose -f docker-compose.yml up -d
 docker compose -f docker-compose.yml ps
 docker compose -f docker-compose.yml logs -f
 ```
+
+The Compose file pins Wekan and FerretDB releases for reproducible local runs.
+Upgrade them deliberately by setting `FERRETDB_RELEASE` or changing the Wekan
+image tag, then validate with `docker compose config --quiet` before starting
+the stack.
 
 Stop the containers without removing data:
 
@@ -149,11 +155,25 @@ Verify MCP stdio initialization and tool discovery:
 npm run test:mcp
 ```
 
-Run the live smoke test only against a disposable or development Wekan instance. It creates temporary cards, comments, checklists, and a subtask, then attempts cleanup:
+The live smoke test is read-only by default. It authenticates and discovers
+boards without changing Wekan:
 
 ```bash
 npm run test:live
 ```
+
+To exercise card, comment, checklist, native-subtask, and update endpoints,
+explicitly opt into mutations and provide a disposable board and list. The
+temporary cards are removed on completion on a best-effort basis:
+
+```bash
+WEKAN_SMOKE_MODE=mutating \
+WEKAN_SMOKE_BOARD_ID=your-board-id \
+WEKAN_SMOKE_LIST_ID=your-list-id \
+npm run test:live
+```
+
+`WEKAN_SMOKE_USERNAME` and `WEKAN_SMOKE_BOARD_TITLE` are optional assertions.
 
 ## Development notes
 

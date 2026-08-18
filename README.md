@@ -58,6 +58,10 @@ Available settings:
 | `WEKAN_PASSWORD` | One auth method | Wekan password. |
 | `WEKAN_REQUEST_TIMEOUT_MS` | No | HTTP timeout in milliseconds. Defaults to `15000`. |
 
+When both a `.env` file and MCP-client environment variables are present, the
+explicit process environment wins. `WEKAN_BASE_URL` must be an `http://` or
+`https://` URL, and the timeout must be a positive integer.
+
 For production instances, use HTTPS and a Wekan account with only the permissions required by the assistant.
 
 ## Build and run

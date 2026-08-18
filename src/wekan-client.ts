@@ -16,6 +16,37 @@ interface LoginResponse {
   tokenExpires?: string;
 }
 
+export interface WekanHttpResponse {
+  statusCode: number;
+  body: { text(): Promise<string> };
+}
+
+export interface WekanRequestOptions {
+  method: string;
+  headers: Record<string, string>;
+  body?: string;
+  headersTimeout: number;
+  bodyTimeout: number;
+}
+
+export type WekanTransport = (url: string, options: WekanRequestOptions) => Promise<WekanHttpResponse>;
+
+const defaultTransport: WekanTransport = (url, options) => request(url, options);
+
+function pathSegment(value: string): string {
+  return encodeURIComponent(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function responseDetail(payload: unknown, fallback: string): string {
+  if (!isRecord(payload)) return fallback;
+  const detail = payload.error ?? payload.message;
+  return detail === undefined ? fallback : String(detail);
+}
+
 export class WekanApiError extends Error {
   constructor(
     message: string,
@@ -33,7 +64,10 @@ export class WekanClient {
   private sessionTokenExpiresAt = 0;
   private currentUserCache: WekanUser | undefined;
 
-  constructor(private readonly config: WekanConfig) {}
+  constructor(
+    private readonly config: WekanConfig,
+    private readonly transport: WekanTransport = defaultTransport,
+  ) {}
 
   private async login(): Promise<string> {
     if (this.config.token) return this.config.token;
@@ -41,7 +75,7 @@ export class WekanClient {
       return this.sessionToken;
     }
 
-    const response = await request(`${this.config.baseUrl}/users/login`, {
+    const response = await this.transport(`${this.config.baseUrl}/users/login`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -53,11 +87,18 @@ export class WekanClient {
     });
     const payload = await this.parseBody(response.body);
     if (response.statusCode >= 400) {
-      throw new WekanApiError("Wekan login failed", response.statusCode, "POST", "/users/login");
+      throw new WekanApiError(
+        `POST /users/login failed: ${responseDetail(payload, `HTTP ${response.statusCode}`)}`,
+        response.statusCode,
+        "POST",
+        "/users/login",
+      );
     }
 
-    const login = payload as LoginResponse;
-    if (!login.token) throw new Error("Wekan login response did not include a token");
+    if (!isRecord(payload) || typeof payload.token !== "string" || !payload.token) {
+      throw new Error("Wekan login response did not include a token");
+    }
+    const login = payload as unknown as LoginResponse;
     this.sessionToken = login.token;
     this.sessionTokenExpiresAt = login.tokenExpires
       ? new Date(login.tokenExpires).getTime()
@@ -77,7 +118,7 @@ export class WekanClient {
 
   async request<T>(method: string, path: string, body?: unknown, retry = true): Promise<T> {
     const token = await this.login();
-    const response = await request(`${this.config.baseUrl}${path}`, {
+    const response = await this.transport(`${this.config.baseUrl}${path}`, {
       method,
       headers: {
         authorization: `Bearer ${token}`,
@@ -93,12 +134,11 @@ export class WekanClient {
     if (response.statusCode === 401 && retry && !this.config.token) {
       this.sessionToken = undefined;
       this.sessionTokenExpiresAt = 0;
+      this.currentUserCache = undefined;
       return this.request<T>(method, path, body, false);
     }
     if (response.statusCode >= 400) {
-      const detail = typeof payload === "object" && payload && "error" in payload
-        ? String((payload as { error: unknown }).error)
-        : `HTTP ${response.statusCode}`;
+      const detail = responseDetail(payload, `HTTP ${response.statusCode}`);
       throw new WekanApiError(`${method} ${path} failed: ${detail}`, response.statusCode, method, path);
     }
     return payload as T;
@@ -111,7 +151,7 @@ export class WekanClient {
   }
 
   getBoard(boardId: string): Promise<WekanBoard> {
-    return this.request("GET", `/api/boards/${boardId}`);
+    return this.request("GET", `/api/boards/${pathSegment(boardId)}`);
   }
 
   async listBoards(): Promise<WekanBoard[]> {
@@ -121,19 +161,19 @@ export class WekanClient {
   }
 
   listLists(boardId: string): Promise<WekanList[]> {
-    return this.request("GET", `/api/boards/${boardId}/lists`);
+    return this.request("GET", `/api/boards/${pathSegment(boardId)}/lists`);
   }
 
   listSwimlanes(boardId: string): Promise<WekanSwimlane[]> {
-    return this.request("GET", `/api/boards/${boardId}/swimlanes`);
+    return this.request("GET", `/api/boards/${pathSegment(boardId)}/swimlanes`);
   }
 
   listCards(boardId: string, listId: string): Promise<WekanCard[]> {
-    return this.request("GET", `/api/boards/${boardId}/lists/${listId}/cards`);
+    return this.request("GET", `/api/boards/${pathSegment(boardId)}/lists/${pathSegment(listId)}/cards`);
   }
 
   getCard(boardId: string, listId: string, cardId: string): Promise<WekanCard> {
-    return this.request("GET", `/api/boards/${boardId}/lists/${listId}/cards/${cardId}`);
+    return this.request("GET", `/api/boards/${pathSegment(boardId)}/lists/${pathSegment(listId)}/cards/${pathSegment(cardId)}`);
   }
 
   async createCard(boardId: string, listId: string, body: Record<string, unknown>): Promise<WekanCard> {
@@ -148,7 +188,7 @@ export class WekanClient {
     if (body.parentId) {
       const results = await this.request<Array<{ index: number; _id?: string; error?: string }>>(
         "POST",
-        `/api/boards/${boardId}/lists/${listId}/cards/bulk`,
+        `/api/boards/${pathSegment(boardId)}/lists/${pathSegment(listId)}/cards/bulk`,
         { cards: [{ ...body, swimlaneId }] },
       );
       const result = results[0];
@@ -158,7 +198,7 @@ export class WekanClient {
       return { _id: result._id, title: String(body.title ?? ""), boardId, listId, swimlaneId: String(swimlaneId), parentId: String(body.parentId) };
     }
 
-    return this.request("POST", `/api/boards/${boardId}/lists/${listId}/cards`, {
+    return this.request("POST", `/api/boards/${pathSegment(boardId)}/lists/${pathSegment(listId)}/cards`, {
       ...body,
       authorId: user._id,
       swimlaneId,
@@ -166,31 +206,31 @@ export class WekanClient {
   }
 
   updateCard(boardId: string, fromListId: string, cardId: string, body: Record<string, unknown>): Promise<WekanCard> {
-    return this.request("PUT", `/api/boards/${boardId}/lists/${fromListId}/cards/${cardId}`, body);
+    return this.request("PUT", `/api/boards/${pathSegment(boardId)}/lists/${pathSegment(fromListId)}/cards/${pathSegment(cardId)}`, body);
   }
 
   deleteCard(boardId: string, listId: string, cardId: string): Promise<unknown> {
-    return this.request("DELETE", `/api/boards/${boardId}/lists/${listId}/cards/${cardId}`);
+    return this.request("DELETE", `/api/boards/${pathSegment(boardId)}/lists/${pathSegment(listId)}/cards/${pathSegment(cardId)}`);
   }
 
   listComments(boardId: string, cardId: string): Promise<WekanComment[]> {
-    return this.request("GET", `/api/boards/${boardId}/cards/${cardId}/comments`);
+    return this.request("GET", `/api/boards/${pathSegment(boardId)}/cards/${pathSegment(cardId)}/comments`);
   }
 
   addComment(boardId: string, cardId: string, comment: string): Promise<{ _id: string }> {
-    return this.request("POST", `/api/boards/${boardId}/cards/${cardId}/comments`, { comment });
+    return this.request("POST", `/api/boards/${pathSegment(boardId)}/cards/${pathSegment(cardId)}/comments`, { comment });
   }
 
   listChecklists(boardId: string, cardId: string): Promise<WekanChecklist[]> {
-    return this.request("GET", `/api/boards/${boardId}/cards/${cardId}/checklists`);
+    return this.request("GET", `/api/boards/${pathSegment(boardId)}/cards/${pathSegment(cardId)}/checklists`);
   }
 
   createChecklist(boardId: string, cardId: string, title: string): Promise<{ _id: string }> {
-    return this.request("POST", `/api/boards/${boardId}/cards/${cardId}/checklists`, { title });
+    return this.request("POST", `/api/boards/${pathSegment(boardId)}/cards/${pathSegment(cardId)}/checklists`, { title });
   }
 
   addChecklistItem(boardId: string, cardId: string, checklistId: string, title: string): Promise<{ _id: string }> {
-    return this.request("POST", `/api/boards/${boardId}/cards/${cardId}/checklists/${checklistId}/items`, { title });
+    return this.request("POST", `/api/boards/${pathSegment(boardId)}/cards/${pathSegment(cardId)}/checklists/${pathSegment(checklistId)}/items`, { title });
   }
 
   updateChecklistItem(
@@ -202,7 +242,7 @@ export class WekanClient {
   ): Promise<{ _id: string }> {
     return this.request(
       "PUT",
-      `/api/boards/${boardId}/cards/${cardId}/checklists/${checklistId}/items/${itemId}`,
+      `/api/boards/${pathSegment(boardId)}/cards/${pathSegment(cardId)}/checklists/${pathSegment(checklistId)}/items/${pathSegment(itemId)}`,
       body,
     );
   }

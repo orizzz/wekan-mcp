@@ -23,6 +23,18 @@ Run `npm run test:mcp` to verify stdio initialization, tool discovery, authentic
 
 The launcher uses the local Node 22 binary and changes into this directory before starting, so `.env` is loaded consistently from AionUI.
 
+## Wekan stack
+
+The local Wekan and FerretDB stack is defined in [`docker-compose.yml`](./docker-compose.yml):
+
+```bash
+docker compose -f docker-compose.yml up -d
+docker compose -f docker-compose.yml ps
+docker compose -f docker-compose.yml logs -f
+```
+
+The stack uses named Docker volumes for Wekan data. Do not run `docker compose down -v` unless you intentionally want to remove that data.
+
 ## Tools
 
 - Discovery: `healthCheck`, `listBoards`, `getBoard`, `listLists`, `listSwimlanes`, `listCards`, `getCard`

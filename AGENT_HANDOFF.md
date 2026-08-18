@@ -3,6 +3,7 @@
 ## Runtime
 
 - Project: `/home/oriz/Documents/wekan-mcp`
+- Compose file: `/home/oriz/Documents/wekan-mcp/docker-compose.yml`
 - Launcher: `/home/oriz/Documents/wekan-mcp/bin/wekan-mcp`
 - Wekan UI: `http://localhost:3000`
 - Board name: `SPN Work`

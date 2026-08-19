@@ -1,4 +1,5 @@
 import { request } from "undici";
+import { buildSearchResult, type CardSearchFilter, type CardSearchResult } from "./card-search.js";
 import type { WekanConfig } from "./config.js";
 import type {
   WekanBoard,
@@ -170,6 +171,35 @@ export class WekanClient {
 
   listCards(boardId: string, listId: string): Promise<WekanCard[]> {
     return this.request("GET", `/api/boards/${pathSegment(boardId)}/lists/${pathSegment(listId)}/cards`);
+  }
+
+  async searchCards(boardId: string, filter: CardSearchFilter = {}): Promise<CardSearchResult> {
+    const lists = await this.listLists(boardId);
+    const requested = filter.listIds ? [...new Set(filter.listIds)] : undefined;
+    if (requested) {
+      const available = new Set(lists.map((list) => list._id));
+      const missing = requested.find((listId) => !available.has(listId));
+      if (missing) throw new Error(`Search listId ${missing} is not in board ${boardId}`);
+    }
+
+    const selectedLists = lists.filter((list) => {
+      if (requested && !requested.includes(list._id)) return false;
+      return filter.includeArchivedLists === true || list.archived !== true;
+    });
+    const cardsByList: Array<{ listId: string; cards: WekanCard[] }> = [];
+    for (let offset = 0; offset < selectedLists.length; offset += 4) {
+      const batch = selectedLists.slice(offset, offset + 4);
+      cardsByList.push(...await Promise.all(batch.map(async (list) => ({
+        listId: list._id,
+        cards: await this.listCards(boardId, list._id),
+      }))));
+    }
+    const cards = cardsByList.flatMap(({ listId, cards: listCards }) => listCards.map((card) => ({
+      ...card,
+      boardId: card.boardId ?? boardId,
+      listId: card.listId ?? listId,
+    })));
+    return buildSearchResult(cards, filter, selectedLists.map((list) => list._id));
   }
 
   getCard(boardId: string, listId: string, cardId: string): Promise<WekanCard> {

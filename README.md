@@ -116,7 +116,40 @@ project directory after building it.
 
 ### Discovery
 
-`healthCheck`, `listBoards`, `getBoard`, `listLists`, `listSwimlanes`, `listCards`, and `getCard`.
+`healthCheck`, `listBoards`, `getBoard`, `listLists`, `listSwimlanes`, `listCards`, `searchCards`, and `getCard`.
+
+`searchCards` is read-only and searches all accessible cards in a board (or
+selected list IDs). Filters combine together: labels support `all` or `any`,
+due dates support set/missing/overdue and inclusive ISO ranges, custom fields
+support equals/contains/exists/missing, and `text` searches titles,
+descriptions, and custom-field values. Results include `totalMatched`, a
+bounded result list (`limit` defaults to 50 and cannot exceed 100), and a
+`truncated` flag. Archived lists are excluded unless `includeArchivedLists`
+is true.
+
+Example search arguments:
+
+```json
+{
+  "boardId": "board-id",
+  "labelIds": ["label-urgent", "label-backend"],
+  "labelMode": "all",
+  "due": { "from": "2026-08-01T00:00:00.000Z", "to": "2026-08-31T23:59:59.999Z" },
+  "customFields": [
+    { "fieldId": "owner", "operator": "contains", "value": "oriz" },
+    { "fieldId": "release", "operator": "exists" }
+  ],
+  "text": "production",
+  "limit": 25
+}
+```
+
+Every supplied filter group is an AND condition. Multiple label IDs use the
+selected `labelMode` (default `all`), while multiple custom-field conditions
+must all match. `state` is mutually exclusive with a due-date range; date
+boundaries are inclusive and must be ISO 8601 timestamps. `searchCards` only
+performs GET requests and returns compact card summaries, so it is safe for
+planning, reporting, and discovery workflows.
 
 ### Cards and subtasks
 

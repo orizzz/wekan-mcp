@@ -114,6 +114,25 @@ test("includes upstream error details without requiring JSON", async () => {
   );
 });
 
+test("searches non-archived board lists and applies read-only filters", async () => {
+  const { transport, calls } = queuedTransport([
+    response(200, [
+      { _id: "list-1", title: "BACKLOG", archived: false },
+      { _id: "list-2", title: "DONE", archived: true },
+    ]),
+    response(200, [{ _id: "card-1", title: "Deploy", labelIds: ["urgent"], listId: "list-1" }]),
+  ]);
+  const result = await new WekanClient(config, transport).searchCards("board-id", { labelIds: ["urgent"] });
+
+  assert.equal(result.totalMatched, 1);
+  assert.deepEqual(result.searchedListIds, ["list-1"]);
+  assert.deepEqual(result.cards.map((card) => card._id), ["card-1"]);
+  assert.deepEqual(calls.map((call) => call.url), [
+    "https://wekan.example.test/api/boards/board-id/lists",
+    "https://wekan.example.test/api/boards/board-id/lists/list-1/cards",
+  ]);
+});
+
 test("creates regular cards with the current user's author ID", async () => {
   const { transport, calls } = queuedTransport([
     response(200, { _id: "user-id", username: "agent" }),

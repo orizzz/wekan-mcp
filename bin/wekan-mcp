@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-project_dir="/home/oriz/Documents/wekan-mcp"
-node_bin="/home/oriz/.nvm/versions/node/v22.22.2/bin/node"
-
-cd "$project_dir"
-exec "$node_bin" "$project_dir/dist/src/server.js"

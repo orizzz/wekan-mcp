@@ -1,0 +1,7 @@
+.codex
+.env
+.git
+graphify-out
+node_modules
+dist
+npm-debug.log*

@@ -16,7 +16,7 @@ try {
   await client.connect(transport);
   const tools = await client.listTools();
   const names = tools.tools.map((tool) => tool.name);
-  for (const required of ["healthCheck", "listBoards", "createCard", "createSubtask", "commentCard", "createChecklist"]) {
+  for (const required of ["healthCheck", "listBoards", "listCards", "searchCards", "createCard", "createSubtask", "commentCard", "createChecklist"]) {
     assert.ok(names.includes(required), `missing MCP tool ${required}`);
   }
 

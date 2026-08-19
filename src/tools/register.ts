@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import type { CardSearchFilter } from "../card-search.js";
 import type { WekanClient } from "../wekan-client.js";
 
 const id = z.string().trim().min(1);
@@ -21,6 +22,7 @@ function cardSummary(card: Record<string, unknown>) {
     members: card.members,
     assignees: card.assignees,
     labelIds: card.labelIds,
+    customFields: card.customFields,
   };
 }
 
@@ -53,6 +55,51 @@ export function registerTools(server: McpServer, client: WekanClient): void {
   server.tool("listCards", "List cards in one board list", { boardId: id, listId: id }, async ({ boardId, listId }) => {
     const cards = await client.listCards(boardId, listId);
     return text(cards.map((card) => cardSummary(card)));
+  });
+
+  const customFieldFilter = z.object({
+    fieldId: id,
+    operator: z.enum(["equals", "contains", "exists", "missing"]),
+    value: z.union([z.string(), z.number().finite(), z.boolean()]).optional(),
+  }).superRefine((field, context) => {
+    if ((field.operator === "equals" || field.operator === "contains") && field.value === undefined) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["value"], message: "value is required for this operator" });
+    }
+    if (field.operator === "contains" && typeof field.value !== "string") {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["value"], message: "contains requires a string value" });
+    }
+  });
+  const dueFilter = z.object({
+    state: z.enum(["set", "missing", "overdue"]).optional(),
+    from: z.string().datetime().optional(),
+    to: z.string().datetime().optional(),
+  }).superRefine((due, context) => {
+    if (due.state && (due.from || due.to)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "state cannot be combined with from or to" });
+    }
+    if (due.from && due.to && new Date(due.from) > new Date(due.to)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "from must be before or equal to to" });
+    }
+  });
+  server.tool("searchCards", "Search accessible cards across a board without changing Wekan", {
+    boardId: id,
+    listIds: z.array(id).min(1).optional(),
+    includeArchivedLists: z.boolean().optional(),
+    labelIds: z.array(id).min(1).optional(),
+    labelMode: z.enum(["all", "any"]).optional(),
+    due: dueFilter.optional(),
+    customFields: z.array(customFieldFilter).optional(),
+    text: z.string().trim().min(1).optional(),
+    limit: z.number().int().min(1).max(100).optional(),
+  }, async ({ boardId, ...filter }) => {
+    const result = await client.searchCards(boardId, filter as CardSearchFilter);
+    return text({
+      totalMatched: result.totalMatched,
+      returned: result.returned,
+      truncated: result.truncated,
+      searchedListIds: result.searchedListIds,
+      cards: result.cards.map((card) => cardSummary(card)),
+    });
   });
 
   server.tool("getCard", "Get one card by board, list, and card ID", {

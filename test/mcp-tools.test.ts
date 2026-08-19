@@ -27,6 +27,7 @@ function fakeClient() {
     listLists: async () => [{ _id: "list-id", title: "BACKLOG", archived: false }],
     listSwimlanes: async () => [{ _id: "swimlane-id", title: "Default", archived: false }],
     listCards: async () => [card],
+    searchCards: async () => ({ totalMatched: 1, returned: 1, truncated: false, searchedListIds: ["list-id"], cards: [card] }),
     getCard: async () => card,
     createCard: async (...args: unknown[]) => {
       record("createCard", ...args);
@@ -84,6 +85,7 @@ test("registers the complete stable tool inventory", async () => {
       "listLists",
       "listSwimlanes",
       "listCards",
+      "searchCards",
       "getCard",
       "createCard",
       "createSubtask",
@@ -136,6 +138,45 @@ test("maps card and subtask arguments to the client contract", async () => {
       method: "createCard",
       args: ["board-id", "list-id", { title: "Subtask", parentId: "parent-id" }],
     });
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test("searchCards is read-only and maps filtering arguments", async () => {
+  const { server, client, fake } = await connectedTools();
+  try {
+    const result = await client.callTool({
+      name: "searchCards",
+      arguments: {
+        boardId: "board-id",
+        labelIds: ["label-id"],
+        labelMode: "any",
+        due: { from: "2026-08-01T00:00:00.000Z" },
+        customFields: [{ fieldId: "owner", operator: "contains", value: "oriz" }],
+        text: "created",
+        limit: 10,
+      },
+    });
+    assert.equal(result.isError, undefined);
+    const content = result.content as Array<{ type: string; text?: string }>;
+    assert.deepEqual(JSON.parse(String(content[0]?.text)), {
+      totalMatched: 1,
+      returned: 1,
+      truncated: false,
+      searchedListIds: ["list-id"],
+      cards: [{
+        id: "card-id",
+        title: "Created card",
+        description: "description",
+        boardId: "board-id",
+        listId: "list-id",
+        swimlaneId: "swimlane-id",
+        parentId: "parent-id",
+      }],
+    });
+    assert.equal(fake.calls.length, 0);
   } finally {
     await client.close();
     await server.close();

@@ -30,12 +30,19 @@ if (mode === "readonly") {
   const boardId = process.env.WEKAN_SMOKE_BOARD_ID?.trim();
   const board = boardId ? boards.find((entry) => entry._id === boardId) : undefined;
   if (boardId) assert.ok(board, `WEKAN_SMOKE_BOARD_ID ${boardId} is not accessible`);
+  const searchBoard = board ?? boards[0];
+  let searchedCards = 0;
+  if (searchBoard) {
+    const search = await client.searchCards(searchBoard._id, { limit: 1 });
+    searchedCards = search.returned;
+  }
   process.stdout.write(JSON.stringify({
     ok: true,
     mode,
     user: user.username,
     boards: board ? [{ id: board._id, title: board.title }] : boards.map((entry) => ({ id: entry._id, title: entry.title })),
-    verified: ["authentication", "board discovery"],
+    searchedCards,
+    verified: ["authentication", "board discovery", "read-only card search"],
   }) + "\n");
 } else {
   const boardId = requiredEnv("WEKAN_SMOKE_BOARD_ID");

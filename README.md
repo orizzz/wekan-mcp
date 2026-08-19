@@ -64,7 +64,7 @@ explicit process environment wins. `WEKAN_BASE_URL` must be an `http://` or
 
 For production instances, use HTTPS and a Wekan account with only the permissions required by the assistant.
 
-## Build and run
+## Local development
 
 ```bash
 npm run check
@@ -84,20 +84,33 @@ The process must start from the project directory so it can load `.env`, or the 
 
 ## MCP client configuration
 
-For a client that supports stdio servers, point the server to the compiled entrypoint:
+For a client that supports stdio servers, run the MCP server through Docker
+Compose. The container receives its credentials from this repository's `.env`
+file and reaches Wekan through the internal Compose network:
 
 ```json
 {
   "mcpServers": {
     "wekan": {
-      "command": "node",
-      "args": ["/absolute/path/to/wekan-mcp/dist/src/server.js"]
+      "command": "docker",
+      "args": [
+        "compose",
+        "-f",
+        "/absolute/path/to/wekan-mcp/docker-compose.yml",
+        "--profile",
+        "mcp",
+        "run",
+        "--rm",
+        "-T",
+        "wekan-mcp"
+      ]
     }
   }
 }
 ```
 
-If the client does not let you set the working directory, provide the `WEKAN_*` variables in its stdio environment configuration or use a small launcher script that changes into the project directory first.
+For local development without Docker, run `node dist/src/server.js` from the
+project directory after building it.
 
 ## Available tools
 
@@ -117,21 +130,39 @@ If the client does not let you set the working directory, provide the `WEKAN_*` 
 
 Native subtasks are stored with Wekan's `parentId` relationship. The server uses the one-card bulk endpoint for subtask creation because some Wekan releases ignore `parentId` on the standard create-card endpoint.
 
-## Run Wekan locally
+## Run Wekan and MCP locally
 
-The repository includes a convenience stack using Wekan and FerretDB with named Docker volumes:
+The Compose stack contains exactly three services: `ferretdb`, `wekan`, and the
+stdio-only `wekan-mcp` entrypoint. Start the persistent Wekan services first:
 
 ```bash
 docker compose -f docker-compose.yml config --quiet
-docker compose -f docker-compose.yml up -d
+docker compose -f docker-compose.yml up -d --build wekan ferretdb
 docker compose -f docker-compose.yml ps
 docker compose -f docker-compose.yml logs -f
 ```
 
-The Compose file pins Wekan and FerretDB releases for reproducible local runs.
-Upgrade them deliberately by setting `FERRETDB_RELEASE` or changing the Wekan
-image tag, then validate with `docker compose config --quiet` before starting
-the stack.
+Run the MCP entrypoint manually to inspect its stdio session, or let the MCP
+client configuration above run it automatically:
+
+```bash
+docker compose -f docker-compose.yml --profile mcp run --rm -T wekan-mcp
+```
+
+Docker Compose is the lifecycle manager for all three services. No Wekan systemd
+unit or `systemctl` wrapper is required; use `docker compose up`, `ps`, `logs`,
+and `down` for startup, inspection, monitoring, and shutdown. Service names are
+project-scoped so this stack can coexist with another Compose project.
+
+Do not start this stack alongside an existing Wekan deployment on the same
+`WEKAN_PORT`. A new Compose project creates its own named data volumes; migrate
+or explicitly reuse the existing FerretDB and file volumes before replacing a
+deployment that already contains board data.
+
+The MCP image is built from this repository's `Dockerfile`; the Wekan and
+FerretDB releases are pinned for reproducible local runs. Upgrade them
+deliberately, then validate with `docker compose config --quiet` before
+starting the stack.
 
 Stop the containers without removing data:
 

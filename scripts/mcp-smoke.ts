@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
+const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const transport = new StdioClientTransport({
-  command: "/home/oriz/Documents/wekan-mcp/bin/wekan-mcp",
-  args: [],
+  command: process.execPath,
+  args: [resolve(projectDir, "dist/src/server.js")],
+  cwd: projectDir,
 });
 const client = new Client({ name: "wekan-mcp-smoke", version: "1.0.0" });
 
